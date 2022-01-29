@@ -4,26 +4,42 @@ import numpy as np
 import time
 import math
 
+# last mod: 29/1/2022 18:30
 
-# last mod: 29/1/2022
+mp_drawing = mp.solutions.drawing_utils
+mp_pose = mp.solutions.pose
+mp_hands = mp.solutions.hands
+mp_drawing_styles = mp.solutions.drawing_styles
+
 
 class PoseEstimation:
-    def __init__(self):
-        self.mp_drawing = mp.solutions.drawing_utils
-        self.mp_pose = mp.solutions.pose
-        self.mp_hands = mp.solutions.hands
-        self.mp_drawing_styles = mp.solutions.drawing_styles
+    def __init__(self, min_pose_detect_conf=0.8, min_pose_track_conf=0.5, min_hands_detect_conf=0.8,
+                 min_hand_track_conf=0.5, max_num_hands=2):
+
+        self.pose = mp_pose.Pose(min_detection_confidence=min_pose_detect_conf,
+                                 min_tracking_confidence=min_pose_track_conf)
+        self.hands = mp_hands.Hands(min_detection_confidence=min_hands_detect_conf,
+                                    min_tracking_confidence=min_hand_track_conf, max_num_hands=max_num_hands)
+
         self.last_moving_time = 0
         self.nose_coords_bfat = [(0, 0, 0), (0, 0, 0)]
         self.nose_moving_coords_list = []
         self.nose_vector_list = []
 
-    def read_results(self, cap, image, pose_results, hands_results):
-        self.cap = cap
-        self.frame_width, self.frame_height = int(cap.get(3)), int(cap.get(4))
+    def process_frame(self, frame):
+        self.frame_height, self.frame_width = frame.shape[:-1]
+
+        image = frame.copy()
+        image.flags.writeable = False
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+        self.pose_results = self.pose.process(image)
+        self.hands_results = self.hands.process(image)
+
+        image.flags.writeable = True
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         self.image = image
-        self.pose_results = pose_results
-        self.hands_results = hands_results
+        return self.image
 
     # POSE
 
@@ -33,7 +49,7 @@ class PoseEstimation:
                 np.array((self.pose_results.pose_landmarks.landmark[landmark_index].x,
                           self.pose_results.pose_landmarks.landmark[landmark_index].y,
                           self.pose_results.pose_landmarks.landmark[landmark_index].z)),
-                [self.cap.get(3), self.cap.get(4), self.cap.get(3)]).astype(int))
+                [self.frame_width, self.frame_height, self.frame_width]).astype(int))
 
     def get_exact_pose_coords(self, landmark_index):
         if self.pose_results.pose_landmarks:
@@ -41,7 +57,7 @@ class PoseEstimation:
                 np.array((self.pose_results.pose_landmarks.landmark[landmark_index].x,
                           self.pose_results.pose_landmarks.landmark[landmark_index].y,
                           self.pose_results.pose_landmarks.landmark[landmark_index].z)),
-                [self.cap.get(3), self.cap.get(4), self.cap.get(3)]))
+                [self.frame_width, self.frame_height, self.frame_width]))
 
     def get_pose_joint_angle(self, joint):
         if self.pose_results.pose_landmarks:
@@ -74,11 +90,11 @@ class PoseEstimation:
 
     def draw_pose(self):
         if self.pose_results.pose_landmarks:
-            self.mp_drawing.draw_landmarks(
+            mp_drawing.draw_landmarks(
                 self.image,
                 self.pose_results.pose_landmarks,
-                self.mp_pose.POSE_CONNECTIONS,
-                landmark_drawing_spec=self.mp_drawing_styles.get_default_pose_landmarks_style())
+                mp_pose.POSE_CONNECTIONS,
+                landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style())
 
     def detect_hand_raise(self, print_result=False, screen_label=False):
         if self.pose_results.pose_landmarks:
@@ -197,7 +213,7 @@ class PoseEstimation:
                     (
                         hand.landmark[landmark_index].x, hand.landmark[landmark_index].y,
                         hand.landmark[landmark_index].z)),
-                [self.cap.get(3), self.cap.get(4), self.cap.get(3)]).astype(int))
+                [self.frame_width, self.frame_height, self.frame_width]).astype(int))
 
     def get_exact_hand_coords(self, hand, landmark_index):
         if self.hands_results.multi_hand_landmarks:
@@ -206,7 +222,7 @@ class PoseEstimation:
                     (
                         hand.landmark[landmark_index].x, hand.landmark[landmark_index].y,
                         hand.landmark[landmark_index].z)),
-                [self.cap.get(3), self.cap.get(4), self.cap.get(3)]))
+                [self.frame_width, self.frame_height, self.frame_width]))
 
     def get_hand_label(self, index, hand, results):
         if self.hands_results.multi_hand_landmarks:
@@ -272,9 +288,9 @@ class PoseEstimation:
     def draw_hand(self):
         if self.hands_results.multi_hand_landmarks:
             for num, hand in enumerate(self.hands_results.multi_hand_landmarks):
-                self.mp_drawing.draw_landmarks(self.image, hand, self.mp_hands.HAND_CONNECTIONS,
-                                               self.mp_drawing_styles.get_default_hand_landmarks_style(),
-                                               self.mp_drawing_styles.get_default_hand_connections_style())
+                mp_drawing.draw_landmarks(self.image, hand, mp_hands.HAND_CONNECTIONS,
+                                          mp_drawing_styles.get_default_hand_landmarks_style(),
+                                          mp_drawing_styles.get_default_hand_connections_style())
 
     def draw_box(self, image, box_name, xywh_tuple, is_pointed):
         x, y, w, h = xywh_tuple
