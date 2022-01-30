@@ -4,8 +4,8 @@ import numpy as np
 import time
 import math
 
-# v4
-# last mod: 30/1/2022 22:30
+# v3
+# last mod: 29/1/2022 18:30
 
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
@@ -37,9 +37,6 @@ class PoseEstimation:
         self.pose_results = self.pose.process(image)
         self.hands_results = self.hands.process(image)
 
-        self.pose_detected = bool(self.pose_results.pose_landmarks)
-        self.hands_detected = bool(self.hands_results.multi_hand_landmarks)
-
         image.flags.writeable = True
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         self.image = image
@@ -48,7 +45,7 @@ class PoseEstimation:
     # POSE
 
     def get_pose_coords(self, landmark_index):
-        if self.pose_detected:
+        if self.pose_results.pose_landmarks:
             return tuple(np.multiply(
                 np.array((self.pose_results.pose_landmarks.landmark[landmark_index].x,
                           self.pose_results.pose_landmarks.landmark[landmark_index].y,
@@ -56,7 +53,7 @@ class PoseEstimation:
                 [self.frame_width, self.frame_height, self.frame_width]).astype(int))
 
     def get_exact_pose_coords(self, landmark_index):
-        if self.pose_detected:
+        if self.pose_results.pose_landmarks:
             return tuple(np.multiply(
                 np.array((self.pose_results.pose_landmarks.landmark[landmark_index].x,
                           self.pose_results.pose_landmarks.landmark[landmark_index].y,
@@ -64,7 +61,7 @@ class PoseEstimation:
                 [self.frame_width, self.frame_height, self.frame_width]))
 
     def get_pose_joint_angle(self, joint):
-        if self.pose_detected:
+        if self.pose_results.pose_landmarks:
             co1, co2, co3 = [self.get_exact_pose_coords(joint[i]) for i in range(3)]
 
             radxy = np.arctan2(co3[1] - co2[1], co3[0] - co2[0]) - np.arctan2(co1[1] - co2[1], co1[0] - co2[0])
@@ -73,7 +70,7 @@ class PoseEstimation:
             return anglexy
 
     def show_pose_joint_angles(self, image, joint_list):
-        if self.pose_detected:
+        if self.pose_results.pose_landmarks:
             for joint in joint_list:
                 joint_angle = self.get_pose_joint_angle(joint)
 
@@ -84,7 +81,7 @@ class PoseEstimation:
             return image
 
     def get_pose_slope_angle(self, index1, index2):
-        if self.pose_detected:
+        if self.pose_results.pose_landmarks:
             co1, co2 = self.get_exact_pose_coords(index1), self.get_exact_pose_coords(index2)
 
             slope_radxy = np.arctan2(co1[1] - co2[1], co1[0] - co2[0])
@@ -93,7 +90,7 @@ class PoseEstimation:
             return slope_anglexy
 
     def draw_pose(self):
-        if self.pose_detected:
+        if self.pose_results.pose_landmarks:
             mp_drawing.draw_landmarks(
                 self.image,
                 self.pose_results.pose_landmarks,
@@ -101,7 +98,7 @@ class PoseEstimation:
                 landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style())
 
     def detect_hand_raise(self, print_result=False, screen_label=False):
-        if self.pose_detected:
+        if self.pose_results.pose_landmarks:
             raised_hand_list = []
 
             right_shoulder = self.get_exact_pose_coords(12)
@@ -137,14 +134,14 @@ class PoseEstimation:
             return raised_hand_list
 
     def get_distance(self, p1, p2):
-        if self.pose_detected or self.hands_detected:
+        if self.pose_results.pose_landmarks or self.hands_results.multi_hand_landmarks:
             dx, dy, dz = (p2[i] - p1[i] for i in range(3))
             dxy = (dx ** 2 + dy ** 2) ** 0.5
 
             return dx, dy, dz, dxy
 
     def is_moving(self, coords_bfat, time_interval, min_distance):
-        if self.pose_detected:
+        if self.pose_results.pose_landmarks:
             dx, dy, dz, dxy = self.get_distance(*coords_bfat)
             if dxy > min_distance:
                 self.last_moving_time = time.time()
@@ -165,7 +162,7 @@ class PoseEstimation:
 
     def draw_moving_line(self, image, landmark_index, coords_list, is_moving, vector_list, draw_line, print_result,
                          color=(255, 0, 0), thickness=3):
-        if self.pose_detected:
+        if self.pose_results.pose_landmarks:
             if is_moving:
                 if is_moving in "-x-y" and [is_moving] != vector_list[-1:]:
                     vector_list.append(is_moving)
@@ -182,7 +179,7 @@ class PoseEstimation:
                     print("Head stopped moving")
 
     def detect_nod(self, time_interval=0.5, min_distance=2, draw_line=True, print_result=False, screen_label=False):
-        if self.pose_detected:
+        if self.pose_results.pose_landmarks:
             self.nose_coords_bfat = [self.nose_coords_bfat[1], self.get_exact_pose_coords(0)]
 
             self.draw_moving_line(self.image, 0, self.nose_moving_coords_list,
@@ -211,7 +208,7 @@ class PoseEstimation:
     # HAND
 
     def get_hand_coords(self, hand, landmark_index):
-        if self.hands_detected:
+        if self.hands_results.multi_hand_landmarks:
             return tuple(np.multiply(
                 np.array(
                     (
@@ -220,7 +217,7 @@ class PoseEstimation:
                 [self.frame_width, self.frame_height, self.frame_width]).astype(int))
 
     def get_exact_hand_coords(self, hand, landmark_index):
-        if self.hands_detected:
+        if self.hands_results.multi_hand_landmarks:
             return tuple(np.multiply(
                 np.array(
                     (
@@ -229,7 +226,7 @@ class PoseEstimation:
                 [self.frame_width, self.frame_height, self.frame_width]))
 
     def get_hand_label(self, index, hand, results):
-        if self.hands_detected:
+        if self.hands_results.multi_hand_landmarks:
             classification = results.multi_handedness[index]
             label = classification.classification[0].label
             label = ("Right", "Left")[("Left", "Right").index(label)]
@@ -240,7 +237,7 @@ class PoseEstimation:
             return txt, coords
 
     def draw_finger_angles(self, image, hand, joint_list):
-        if self.hands_detected:
+        if self.hands_results.multi_hand_landmarks:
             for joint in joint_list:
                 co1, co2, co3 = [self.get_hand_coords(hand, joint[i]) for i in range(3)]
                 print(co1, co2, co3)
@@ -255,21 +252,21 @@ class PoseEstimation:
             return image
 
     def get_hand_slope_angle(self, hand, index1, index2):
-        if self.hands_detected:
+        if self.hands_results.multi_hand_landmarks:
             co1, co2 = self.get_exact_hand_coords(hand, index1), self.get_exact_hand_coords(hand, index2)
 
             radxy = np.arctan2(co1[1] - co2[1], co1[0] - co2[0])
             return radxy
 
     def get_hand_slope(self, hand, index1, index2):
-        if self.hands_detected:
+        if self.hands_results.multi_hand_landmarks:
             co1, co2 = self.get_exact_hand_coords(hand, index1), self.get_exact_hand_coords(hand, index2)
             slope = (co2[1] - co1[1]) / (co2[0] - co1[0])
 
             return slope
 
     def draw_cont_line(self, hand, image, start_point, mid_point, length=200, color=(0, 255, 0), thickness=2):
-        if self.hands_detected:
+        if self.hands_results.multi_hand_landmarks:
             co_mid = self.get_hand_coords(hand, mid_point)
             co_start = self.get_hand_coords(hand, start_point)
             slope = self.get_hand_slope(hand, start_point, mid_point)
@@ -290,7 +287,7 @@ class PoseEstimation:
             return co_start, co_mid, slope
 
     def draw_hand(self):
-        if self.hands_detected:
+        if self.hands_results.multi_hand_landmarks:
             for num, hand in enumerate(self.hands_results.multi_hand_landmarks):
                 mp_drawing.draw_landmarks(self.image, hand, mp_hands.HAND_CONNECTIONS,
                                           mp_drawing_styles.get_default_hand_landmarks_style(),
@@ -310,7 +307,7 @@ class PoseEstimation:
             self.draw_box(self.image, *box, is_pointed)
 
     def draw_hand_label(self):
-        if self.hands_detected:
+        if self.hands_results.multi_hand_landmarks:
             for num, hand in enumerate(self.hands_results.multi_hand_landmarks):
 
                 if self.get_hand_label(num, hand, self.hands_results):
@@ -318,7 +315,7 @@ class PoseEstimation:
                     cv2.putText(self.image, text, coord, cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
 
     def point_to(self, box_list, finger_list, print_result=False, screen_label=False):
-        if self.hands_detected:
+        if self.hands_results.multi_hand_landmarks:
             pointed_box_list = []
 
             for box in box_list:
