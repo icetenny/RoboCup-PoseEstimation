@@ -4,7 +4,8 @@ import time
 
 # import mediapipe as mp
 
-# last mod: 29/1/2022 18:30
+# v4
+# last mod: 30/1/2022 22:30
 
 
 cap = cv2.VideoCapture(0)
@@ -33,7 +34,8 @@ while cap.isOpened():
 
     image = PE.process_frame(frame)
 
-    if PE.pose_results.pose_landmarks:
+    if PE.pose_detected:
+
         PE.draw_pose()
 
         raise_hand = PE.detect_hand_raise(print_result=False, screen_label=True)
@@ -53,7 +55,7 @@ while cap.isOpened():
     # draw green boxes for every object in box_list
     PE.draw_boxes(box_list)
 
-    if PE.hands_results.multi_hand_landmarks:
+    if PE.hands_detected:
         PE.draw_hand()
         PE.draw_hand_label()
 
