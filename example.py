@@ -4,6 +4,7 @@ import time
 
 # import mediapipe as mp
 
+# v3
 # last mod: 29/1/2022 18:30
 
 
